@@ -1,10 +1,10 @@
+// Node Modules
 import jwt from 'jsonwebtoken';
 
-/**
- * Config
- */
+// Custom Modules
 import config from '@/config';
 
+// Types
 import { Types } from 'mongoose';
 
 export const generateAccessToken = (userId: Types.ObjectId): string => {

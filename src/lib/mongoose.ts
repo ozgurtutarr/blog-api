@@ -1,8 +1,14 @@
+// Node Modules
 import mongoose from 'mongoose';
+
+// Custom Modules
 import config from '@/config';
-import type { ConnectOptions } from 'mongoose';
 import { logger } from '@/lib/winston';
 
+// Type Definitions
+import type { ConnectOptions } from 'mongoose';
+
+// Constants
 const clientOptions: ConnectOptions = {
   dbName: 'blog-api',
   appName: 'Blog API',
@@ -21,16 +27,10 @@ export const connectToDatabase = async (): Promise<void> => {
   try {
     await mongoose.connect(config.MONGODB_URI, clientOptions);
 
-    logger.info('Connected to the database successfully.', {
-      uri: config.MONGODB_URI,
-      options: clientOptions,
-    });
+    logger.info('Connected to the database successfully.');
   } catch (err) {
-    if (err instanceof Error) {
-      throw err;
-    }
-
     logger.error('Error connecting to the database', err);
+    throw err;
   }
 };
 
@@ -38,15 +38,9 @@ export const disconnectFromDatabase = async (): Promise<void> => {
   try {
     await mongoose.disconnect();
 
-    logger.info('Disconnected from the database successfully.', {
-      uri: config.MONGODB_URI,
-      options: clientOptions,
-    });
+    logger.info('Disconnected from the database successfully.');
   } catch (err) {
-    if (err instanceof Error) {
-      throw new Error(err.message);
-    }
-
     logger.error('Error disconnecting from the database', err);
+    throw err;
   }
 };

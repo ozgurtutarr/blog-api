@@ -1,9 +1,14 @@
+// Custom Modules
 import { logger } from '@/lib/winston';
 import config from '@/config';
 import { genUsername } from '@/utils';
-import User from '@/models/user';
 import { generateAccessToken, generateRefreshToken } from '@/lib/jwt';
 
+// Models
+import User from '@/models/user';
+import Token from '@/models/token';
+
+// Types
 import type { Request, Response } from 'express';
 import type { IUser } from '@/models/user';
 
@@ -22,6 +27,18 @@ const register = async (req: Request, res: Response): Promise<void> => {
   const { email, password, role } = req.body as UserData;
   console.log('Registering user:', { email, password, role });
 
+  if (role === 'admin' && !config.WHITELIST_ADMINS_MAIL.includes(email)) {
+    res.status(403).json({
+      code: 'InvalidRole',
+      message: 'Admin role is not allowed',
+    });
+    logger.warn('Admin role is not allowed', {
+      email,
+      role,
+    });
+    return;
+  }
+
   try {
     const username = genUsername();
     const newUser = await User.create({
@@ -31,8 +48,20 @@ const register = async (req: Request, res: Response): Promise<void> => {
       role,
     });
 
+    // Generate Access and Refresh Tokens for the new user
     const accessToken = generateAccessToken(newUser._id);
     const refreshToken = generateRefreshToken(newUser._id);
+
+    // Set Refresh Token in db
+    await Token.create({
+      token: refreshToken,
+      userId: newUser._id,
+    });
+    logger.info('Refresh token saved in db', {
+      userId: newUser._id,
+      token: refreshToken,
+    });
+
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: config.NODE_ENV === 'production',
@@ -63,7 +92,7 @@ const register = async (req: Request, res: Response): Promise<void> => {
       message: 'Internal server error',
       error: error,
     });
-    logger.error('Error during user registration', { error });
+    logger.error('Error during user registration', error);
   }
 };
 

@@ -1,13 +1,17 @@
+// Node Modules
 import winston from 'winston';
+
+// Custom Modules
 import config from '@/config';
 
+// Winston configuration
 const { combine, timestamp, json, errors, align, printf, colorize } =
   winston.format;
 
 const transports: winston.transport[] = [];
 
 // If the application is not running in production, add a console transport
-if (process.env.NODE_ENV !== 'production') {
+if (config.NODE_ENV !== 'production') {
   transports.push(
     new winston.transports.Console({
       format: combine(

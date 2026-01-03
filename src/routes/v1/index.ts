@@ -1,6 +1,9 @@
+// Node Modules
 import { Router } from 'express';
 
-import authRoutes from './auth';
+// Routes
+import authRoutes from '@/routes/v1/auth';
+
 const router = Router();
 
 router.get('/', (req, res) => {

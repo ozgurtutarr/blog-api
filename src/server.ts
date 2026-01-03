@@ -1,23 +1,23 @@
-// Main server file
+// Node Modules
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
 import helmet from 'helmet';
 
-// Import configuration
+// Router
+import v1Routes from '@/routes/v1';
+
+// Custom Modules
 import config from '@/config';
 import expressRateLimit from '@/lib/express_rate_limit';
-import v1Routes from '@/routes/v1';
+import { connectToDatabase, disconnectFromDatabase } from './lib/mongoose';
 import { logger } from '@/lib/winston';
 
-// Import database connection functions
-import { connectToDatabase, disconnectFromDatabase } from './lib/mongoose';
-
-// Import type definitions
+// Type Definitions
 import type { CorsOptions } from 'cors';
 
-// Create Express app
+// Express app initialization
 const app = express();
 
 // CORS configuration
@@ -30,11 +30,10 @@ const corsOptions: CorsOptions = {
     ) {
       callback(null, true);
     } else {
-      (callback(
-        new Error('Not allowed by CORS policy ${origin} is not allowed'),
-      ),
-        false);
       logger.warn(`CORS policy: ${origin} is not allowed`);
+      callback(
+        new Error(`Not allowed by CORS policy: ${origin} is not allowed`),
+      );
     }
   },
 };
@@ -59,11 +58,11 @@ app.use(expressRateLimit);
     app.use('/api/v1', v1Routes);
 
     app.listen(config.PORT, () => {
-      logger.info(`Server is running on http://localhost:${config.PORT}`);
+      logger.info(`Server is running on port: http://localhost:${config.PORT}`);
     });
   } catch (error) {
     logger.error('Error starting the server:', error);
-    if (config.NODE_ENV === 'prodcution') {
+    if (config.NODE_ENV === 'production') {
       process.exit(1);
     }
   }

@@ -1,4 +1,8 @@
-import { Schema, model } from 'mongoose';
+// Node Modules
+import { Schema, model, CallbackError } from 'mongoose';
+import bcrypt from 'bcrypt';
+
+// Types
 
 export interface IUser {
   username: string;
@@ -17,6 +21,7 @@ export interface IUser {
   };
 }
 
+// User Schema
 const userSchema = new Schema<IUser>(
   {
     username: {
@@ -97,15 +102,15 @@ const userSchema = new Schema<IUser>(
   },
 );
 
-// userSchema.pre('save', async function (next) {
-//   if (!this.isModified('password')) {
-//     next();
-//     return;
-//   }
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) {
+    return;
+  }
 
-//   // Hash the password
-//   this.password = await bcrypt.hash(this.password, 10);
-//   next();
-// });
+  // Hash the password
+  this.password = await bcrypt.hash(this.password, 10);
+});
 
 export default model<IUser>('User', userSchema);
