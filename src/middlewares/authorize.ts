@@ -1,5 +1,5 @@
 // Custom Modules
-import { logger } from '@/lib/winston';
+import { AppError } from '@/utils/AppError';
 
 // Models
 import User from '@/models/user';
@@ -11,36 +11,26 @@ export type AuthRole = 'admin' | 'user';
 
 const authorize = (roles: AuthRole[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
-    const userId = req.userId;
-
     try {
-      const user = await User.findById(userId).select('role').exec();
+      const userId = req.userId;
+
+      if (!userId) {
+        throw new AppError('User not authenticated', 401);
+      }
+
+      const user = await User.findById(userId).select('role').lean().exec();
 
       if (!user) {
-        res.status(404).json({
-          code: 'NotFound',
-          message: 'User not found',
-        });
-        return;
+        throw new AppError('User not found', 404);
       }
 
       if (!roles.includes(user.role)) {
-        res.status(403).json({
-          code: 'AuthorizationError',
-          message: 'Access denied, insufficient permissions',
-        });
-        return;
+        throw new AppError('Access denied, insufficient permissions', 403);
       }
 
-      return next();
+      next();
     } catch (err) {
-      res.status(500).json({
-        code: 'ServerError',
-        message: 'Internal server error',
-        error: err,
-      });
-
-      logger.error('Error while authorizing user', err);
+      next(err);
     }
   };
 };

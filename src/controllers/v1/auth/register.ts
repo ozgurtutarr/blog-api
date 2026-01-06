@@ -1,67 +1,51 @@
+// Node Modules
+import { Request, Response, NextFunction } from 'express';
+
 // Custom Modules
 import { logger } from '@/lib/winston';
 import config from '@/config';
 import { genUsername } from '@/utils';
 import { generateAccessToken, generateRefreshToken } from '@/lib/jwt';
+import { AppError } from '@/utils/AppError';
 
 // Models
 import User from '@/models/user';
 import Token from '@/models/token';
 
-// Types
-import type { Request, Response } from 'express';
-import type { IUser } from '@/models/user';
-
-type UserData = Pick<
-  IUser,
-  | 'username'
-  | 'email'
-  | 'password'
-  | 'role'
-  | 'firstName'
-  | 'lastName'
-  | 'socialLinks'
->;
-
-const register = async (req: Request, res: Response): Promise<void> => {
-  const { email, password, role } = req.body as UserData;
-  console.log('Registering user:', { email, password, role });
-
-  if (role === 'admin' && !config.WHITELIST_ADMINS_MAIL.includes(email)) {
-    res.status(403).json({
-      code: 'InvalidRole',
-      message: 'Admin role is not allowed',
-    });
-    logger.warn('Admin role is not allowed', {
-      email,
-      role,
-    });
-    return;
-  }
-
+const register = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
+    const { email, password, role } = req.body;
+
+    // Check strict admin whitelist
+    if (role === 'admin' && !config.WHITELIST_ADMINS_MAIL.includes(email)) {
+      return next(new AppError('You are not authorized to be an admin', 403));
+    }
+
     const username = genUsername();
+
+    // Create new user (password hashing is handled by pre-save hook)
     const newUser = await User.create({
       username,
       email,
       password,
-      role,
+      role: role || 'user',
     });
 
-    // Generate Access and Refresh Tokens for the new user
+    // Generate Tokens
     const accessToken = generateAccessToken(newUser._id);
     const refreshToken = generateRefreshToken(newUser._id);
 
-    // Set Refresh Token in db
+    // Save Refresh Token
     await Token.create({
       token: refreshToken,
       userId: newUser._id,
     });
-    logger.info('Refresh token saved in db', {
-      userId: newUser._id,
-      token: refreshToken,
-    });
 
+    // Send Cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: config.NODE_ENV === 'production',
@@ -69,30 +53,25 @@ const register = async (req: Request, res: Response): Promise<void> => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    // logger.info('User registered successfully', { user });
-    // console.log('User registered successfully', { user });
-
+    // Send Response
     res.status(201).json({
-      user: {
-        username: newUser.username,
-        email: newUser.email,
-        role: newUser.role,
+      status: 'success',
+      token: accessToken,
+      data: {
+        user: {
+          username: newUser.username,
+          email: newUser.email,
+          role: newUser.role,
+        },
       },
-      accessToken,
     });
 
     logger.info('User registered successfully', {
-      username: newUser.username,
+      userId: newUser._id,
       email: newUser.email,
-      role: newUser.role,
     });
   } catch (error) {
-    res.status(500).json({
-      code: 'ServerError',
-      message: 'Internal server error',
-      error: error,
-    });
-    logger.error('Error during user registration', error);
+    next(error);
   }
 };
 

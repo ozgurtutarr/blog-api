@@ -1,116 +1,55 @@
 // Node Modules
 import { Router } from 'express';
 import { body, cookie } from 'express-validator';
-import bcrypt from 'bcrypt';
 
 // Controllers
 import register from '@/controllers/v1/auth/register';
 import login from '@/controllers/v1/auth/login';
 import refreshToken from '@/controllers/v1/auth/refresh_token';
 import logout from '@/controllers/v1/auth/logout';
+
+// Middlewares
 import authenticate from '@/middlewares/authenticate';
+import validationError from '@/middlewares/validationError';
+import User from '@/models/user';
 
 const router = Router();
 
-// Middlewares
-import validationError from '@/middlewares/validationError';
-
-// Models
-import User from '@/models/user';
-
-router.post(
-  '/register',
+const registerValidation = [
   body('email')
-    .trim()
-    .notEmpty()
-    .withMessage('Email is required')
-    .isLength({ max: 50 })
-    .withMessage('Email must be less than 50 characters')
     .isEmail()
     .withMessage('Invalid email address')
     .custom(async (value) => {
+      // Check for existing user
       const userExists = await User.exists({ email: value });
-      if (userExists) {
-        throw new Error('User email or password is invalid');
-      }
+      if (userExists) throw new Error('Email already in use');
     }),
   body('password')
-    .notEmpty()
-    .withMessage('Password is required')
     .isLength({ min: 8 })
     .withMessage('Password must be at least 8 characters long'),
-  body('role')
-    .optional()
-    .isString()
-    .withMessage('Role must be a string')
-    .isIn(['admin', 'user'])
-    .withMessage('Role must be either admin or user'),
+  body('role').optional().isIn(['admin', 'user']).withMessage('Invalid role'),
   validationError,
-  register,
-);
+];
 
-router.post(
-  '/login',
-  body('email')
-    .trim()
-    .notEmpty()
-    .withMessage('Email is required')
-    .isLength({ max: 50 })
-    .withMessage('Email must be less than 50 characters')
-    .isEmail()
-    .withMessage('Invalid email address')
-    .custom(async (value) => {
-      const userExists = await User.exists({ email: value });
-      if (!userExists) {
-        throw new Error('User email or password is invalid');
-      }
-    }),
-  body('password')
-    .notEmpty()
-    .withMessage('Password is required')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters long')
-    .custom(async (value, { req }) => {
-      const { email } = req.body as { email: string };
-      const user = await User.findOne({ email })
-        .select('password')
-        .lean()
-        .exec();
-
-      if (!user) {
-        throw new Error('User email or password is invalid');
-      }
-
-      const passwordMatch = await bcrypt.compare(value, user.password);
-
-      if (!passwordMatch) {
-        throw new Error('User email or password is invalid');
-      }
-    }),
+const loginValidation = [
+  body('email').isEmail().withMessage('Invalid email address'),
+  body('password').notEmpty().withMessage('Password is required'),
   validationError,
-  login,
-);
+];
 
-router.post(
-  '/refresh-token',
-  cookie('refreshToken')
-    .notEmpty()
-    .withMessage('Refresh token required')
-    .isJWT()
-    .withMessage('Invalid refresh token'),
+const tokenValidation = [
+  cookie('refreshToken').isJWT().withMessage('Invalid refresh token'),
   validationError,
-  refreshToken,
-);
+];
 
-router.post(
-  '/logout',
-  authenticate,
-  cookie('refreshToken')
-    .notEmpty()
-    .withMessage('Refresh token required')
-    .isJWT()
-    .withMessage('Invalid refresh token'),
-  validationError,
-  logout,
-);
+// --- Routes ---
+
+router.post('/register', registerValidation, register);
+
+router.post('/login', loginValidation, login);
+
+router.post('/refresh-token', tokenValidation, refreshToken);
+
+router.post('/logout', authenticate, tokenValidation, logout);
+
 export default router;

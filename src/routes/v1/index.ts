@@ -5,6 +5,9 @@ import { Router } from 'express';
 import authRoutes from '@/routes/v1/auth';
 import userRoutes from '@/routes/v1/user';
 
+import blogRoutes from '@/routes/v1/blog';
+import commentRoutes from '@/routes/v1/comment';
+
 const router = Router();
 
 router.get('/', (req, res) => {
@@ -19,5 +22,24 @@ router.get('/', (req, res) => {
 
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
+router.use('/blogs', blogRoutes);
+router.use('/comments', commentRoutes);
+
+// Like Routes (Inline for now or move to separate file if grows)
+import toggleLike from '@/controllers/v1/like/toggle_like';
+import authenticate from '@/middlewares/authenticate';
+import { body, param } from 'express-validator';
+import validationError from '@/middlewares/validationError';
+
+router.post(
+  '/likes/:resourceId',
+  authenticate,
+  param('resourceId').isMongoId().withMessage('Invalid ID'),
+  body('resourceType')
+    .isIn(['blog', 'comment'])
+    .withMessage('Type must be blog or comment'),
+  validationError,
+  toggleLike,
+);
 
 export default router;

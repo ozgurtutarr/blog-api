@@ -1,9 +1,8 @@
 // Node Modules
-import { Schema, model, CallbackError } from 'mongoose';
+import { Schema, model, Model, CallbackError } from 'mongoose';
 import bcrypt from 'bcrypt';
 
 // Types
-
 export interface IUser {
   username: string;
   email: string;
@@ -19,22 +18,35 @@ export interface IUser {
     x?: string;
     youtube?: string;
   };
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-// User Schema
-const userSchema = new Schema<IUser>(
+// Interface for User Instance Methods
+export interface IUserMethods {
+  correctPassword(candidatePassword: string): Promise<boolean>;
+}
+
+// Combine Interface
+type UserModel = Model<IUser, {}, IUserMethods>;
+
+// User Schema Schema<DocType, Model, InstanceMethods>
+const userSchema = new Schema<IUser, UserModel, IUserMethods>(
   {
     username: {
       type: String,
       required: [true, 'Username is required'],
       maxLength: [20, 'Username must be less than 20 characters'],
-      unique: [true, 'Username must be unique'],
+      unique: true, // simplified unique check
+      trim: true,
     },
     email: {
       type: String,
       required: [true, 'Email is required'],
       maxLength: [50, 'Email must be less than 50 characters'],
-      unique: [true, 'Email must be unique'],
+      unique: true,
+      lowercase: true,
+      trim: true,
     },
     password: {
       type: String,
@@ -53,10 +65,12 @@ const userSchema = new Schema<IUser>(
     firstName: {
       type: String,
       maxLength: [20, 'First name must be less than 20 characters'],
+      trim: true,
     },
     lastName: {
       type: String,
       maxLength: [20, 'Last name must be less than 20 characters'],
+      trim: true,
     },
     socialLinks: {
       website: {
@@ -102,15 +116,20 @@ const userSchema = new Schema<IUser>(
   },
 );
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
+// Pre-save hook to hash password
 userSchema.pre('save', async function () {
-  if (!this.isModified('password')) {
-    return;
-  }
+  // Only run this function if password was actually modified
+  if (!this.isModified('password')) return;
 
-  // Hash the password
-  this.password = await bcrypt.hash(this.password, 10);
+  // Hash the password with cost of 12
+  this.password = await bcrypt.hash(this.password, 12);
 });
 
-export default model<IUser>('User', userSchema);
+// Instance method to check password
+userSchema.methods.correctPassword = async function (
+  candidatePassword: string,
+): Promise<boolean> {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
+
+export default model<IUser, UserModel>('User', userSchema);

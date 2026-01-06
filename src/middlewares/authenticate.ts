@@ -1,32 +1,31 @@
 // Node modules
-
+import { Request, Response, NextFunction } from 'express';
 import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 
 // Custom modules
 import { verifyAccessToken } from '@/lib/jwt';
-import { logger } from '@/lib/winston';
+import { AppError } from '@/utils/AppError';
 
 // Types
-import type { Request, Response, NextFunction } from 'express';
 import type { Types } from 'mongoose';
 
 const authenticate = (req: Request, res: Response, next: NextFunction) => {
-  // Extract the Authorization header
-  const authHeader = req.headers.authorization;
-
-  // If there's no Bearer token, respond with 401 Unauthorized
-  if (!authHeader?.startsWith('Bearer ')) {
-    res.status(401).json({
-      code: 'AuthenticationError',
-      message: 'Access denied, no token provided',
-    });
-    return;
-  }
-
-  // Split out the token from the 'Bearer' prefix
-  const [_, token] = authHeader.split(' ');
-
   try {
+    // Extract the Authorization header
+    const authHeader = req.headers.authorization;
+
+    // If there's no Bearer token, respond with 401 Unauthorized
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new AppError('Access denied, no token provided', 401);
+    }
+
+    // Split out the token from the 'Bearer' prefix
+    const [_, token] = authHeader.split(' ');
+
+    if (!token) {
+      throw new AppError('Access denied, malformed token', 401);
+    }
+
     // Verify the token and extract the userId from the payload
     const jwtPayload = verifyAccessToken(token) as { userId: Types.ObjectId };
 
@@ -34,34 +33,28 @@ const authenticate = (req: Request, res: Response, next: NextFunction) => {
     req.userId = jwtPayload.userId;
 
     // Proceed to the next middleware or route handler
-    return next();
+    next();
   } catch (err) {
-    // Handle expired token error
     if (err instanceof TokenExpiredError) {
-      res.status(401).json({
-        code: 'AuthenticationError',
-        message: 'Access token expired, request a new one with refresh token',
-      });
-      return;
+      return next(
+        new AppError(
+          'Access token expired, request a new one with refresh token',
+          401,
+        ),
+      );
     }
 
-    // Handle invalid token error
     if (err instanceof JsonWebTokenError) {
-      res.status(401).json({
-        code: 'AuthenticationError',
-        message: 'Access token invalid',
-      });
-      return;
+      return next(new AppError('Access token invalid', 401));
     }
 
-    // Catch-all for other errors
-    res.status(500).json({
-      code: 'ServerError',
-      message: 'Internal server error',
-      error: err,
-    });
+    // Pass detailed error 401 for auth failures
+    if (err instanceof AppError) {
+      return next(err);
+    }
 
-    logger.error('Error during authentication', err);
+    // For other errors, let global handler decide (mostly 500)
+    next(err);
   }
 };
 
